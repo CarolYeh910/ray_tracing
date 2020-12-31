@@ -5,19 +5,19 @@
 
 class camera {
     public:
-        camera(
+        __device__ camera(
             point3 lookfrom,
             point3 lookat,
             vec3   vup,
-            double vfov, // vertical field-of-view in degrees
-            double aspect_ratio,
-            double aperture,
-            double focus_dist
+            float vfov, // vertical field-of-view in degrees
+            float aspect_ratio,
+            float aperture,
+            float focus_dist
         ) {
-            auto theta = degrees_to_radians(vfov);
-            auto h = tan(theta/2);
-            auto viewport_height = 2.0 * h;
-            auto viewport_width = aspect_ratio * viewport_height;
+            float theta = degrees_to_radians(vfov);
+            float h = tan(theta/2.0f);
+            float viewport_height = 2.0f * h;
+            float viewport_width = aspect_ratio * viewport_height;
 
             w = unit_vector(lookfrom - lookat);
             u = unit_vector(cross(vup, w));
@@ -31,8 +31,8 @@ class camera {
             lens_radius = aperture / 2;
         }
 
-        ray get_ray(double s, double t) const {
-            vec3 rd = lens_radius * random_in_unit_disk();
+        __device__ ray get_ray(float s, float t, curandState* local_rand_state) const {
+            vec3 rd = lens_radius * random_in_unit_disk(local_rand_state);
             vec3 offset = u * rd.x() + v * rd.y();
 
             return ray(

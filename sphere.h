@@ -6,31 +6,31 @@
 
 class sphere : public hittable {
     public:
-        sphere() {}
-        sphere(point3 cen, double r, shared_ptr<material> m)
-            : center(cen), radius(r), mat_ptr(m) {};
+        __host__ __device__ sphere() {}
+        __host__ __device__ sphere(point3 cen, float r, material* m)
+							: center(cen), radius(r), mat_ptr(m) {};
 
-        virtual bool hit(
-            const ray& r, double t_min, double t_max, hit_record& rec) const override;
+        __device__ virtual bool hit(
+            const ray& r, float t_min, float t_max, hit_record& rec) const override;
 
     public:
         point3 center;
-        double radius;
-        shared_ptr<material> mat_ptr;
+        float radius;
+        material* mat_ptr;
 };
 
-bool sphere::hit(const ray& r, double t_min, double t_max, hit_record& rec) const {
+__device__ bool sphere::hit(const ray& r, float t_min, float t_max, hit_record& rec) const {
     vec3 oc = r.origin() - center;
-    auto a = r.direction().length_squared();
-    auto half_b = dot(oc, r.direction());
-    auto c = oc.length_squared() - radius*radius;
+    float a = r.direction().length_squared();
+    float half_b = dot(oc, r.direction());
+    float c = oc.length_squared() - radius*radius;
 
-    auto discriminant = half_b*half_b - a*c;
-    if (discriminant < 0) return false;
-    auto sqrtd = sqrt(discriminant);
+    float discriminant = half_b*half_b - a*c;
+    if (discriminant < 0.0f) return false;
+    float sqrtd = sqrt(discriminant);
 
     // Find the nearest root that lies in the acceptable range.
-    auto root = (-half_b - sqrtd) / a;
+    float root = (-half_b - sqrtd) / a;
     if (root < t_min || t_max < root) {
         root = (-half_b + sqrtd) / a;
         if (root < t_min || t_max < root)
