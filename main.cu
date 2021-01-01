@@ -107,7 +107,7 @@ __device__ color ray_color(const ray& r, hittable_list** world, int max_depth, c
 	return vec3(0.0f, 0.0f, 0.0f); // exceeded recursion
 }
 
-__global__ void render(int* ib, int image_width, int image_height, int samples_per_pixel, int max_depth,
+__global__ void render(int* fb, int image_width, int image_height, int samples_per_pixel, int max_depth,
 						hittable_list** world, camera** cam, curandState* rand_state) {
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
 	int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -122,7 +122,7 @@ __global__ void render(int* ib, int image_width, int image_height, int samples_p
 		ray r = (*cam)->get_ray(u, v, local_rand_state);
 		pixel_color += ray_color(r, world, max_depth, local_rand_state);
 	}
-	write_color(ib + pixel_index * 3, pixel_color, samples_per_pixel);
+	write_color(fb + pixel_index * 3, pixel_color, samples_per_pixel);
 }
 
 int main() {
@@ -161,11 +161,11 @@ int main() {
 	std::cerr << "in " << thread_width << "x" << thread_height << " blocks.\n";
 
 	int num_pixels = image_width * image_height;
-	size_t ib_size = 3 * num_pixels * sizeof(int);
+	size_t fb_size = 3 * num_pixels * sizeof(int);
 
 	// allocate FB
-	int* ib;
-	checkCudaErrors(cudaMallocManaged((void**)&ib, ib_size));
+	int* fb;
+	checkCudaErrors(cudaMallocManaged((void**)&fb, fb_size));
 
 	dim3 blocks(image_width / thread_width + 1, image_height / thread_height + 1);
 	dim3 threads(thread_width, thread_height);
@@ -180,7 +180,7 @@ int main() {
 	clock_t start, stop;
 	start = clock();
 	// Render our buffer
-	render <<<blocks, threads>>> (ib, image_width, image_height, samples_per_pixel, max_depth, d_world, d_camera, d_rand_state);
+	render <<<blocks, threads>>> (fb, image_width, image_height, samples_per_pixel, max_depth, d_world, d_camera, d_rand_state);
 	checkCudaErrors(cudaGetLastError());
 	checkCudaErrors(cudaDeviceSynchronize());
 	stop = clock();
@@ -192,7 +192,7 @@ int main() {
 	for (int j = image_height - 1; j >= 0; j--) {
 		for (int i = 0; i < image_width; i++) {
 			size_t pixel_index = j * 3 * image_width + i * 3;
-			std::cout << ib[pixel_index + 0] << ' ' << ib[pixel_index + 1] << ' ' << ib[pixel_index + 2] << '\n';
+			std::cout << fb[pixel_index + 0] << ' ' << fb[pixel_index + 1] << ' ' << fb[pixel_index + 2] << '\n';
 		}
 	}
 
@@ -204,7 +204,7 @@ int main() {
     checkCudaErrors(cudaFree(d_world));
     checkCudaErrors(cudaFree(d_list));
     checkCudaErrors(cudaFree(d_rand_state));
-    checkCudaErrors(cudaFree(ib));
+    checkCudaErrors(cudaFree(fb));
 
     // useful for cuda-memcheck --leak-check full
     cudaDeviceReset();
