@@ -134,8 +134,8 @@ int main() {
     const int samples_per_pixel = 500;
     const int max_depth = 50;
 
-	int thread_width = 8;
-	int thread_height = 8;
+	int thread_width = 24;
+	int thread_height = 16;
 
     curandState *d_rand_state_world;
     checkCudaErrors(cudaMalloc((void **)&d_rand_state_world, 1*sizeof(curandState)));
@@ -157,7 +157,7 @@ int main() {
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
-	std::cerr << "Rendering a " << image_width << "x" << image_height << " image with " << samples_per_pixel << " samples per pixel";
+	std::cerr << "Rendering a " << image_width << "x" << image_height << " image with " << samples_per_pixel << " samples per pixel ";
 	std::cerr << "in " << thread_width << "x" << thread_height << " blocks.\n";
 
 	int num_pixels = image_width * image_height;
@@ -198,7 +198,7 @@ int main() {
 
     // clean up
     checkCudaErrors(cudaDeviceSynchronize());
-    free_world<<<1,1>>>(d_list,d_world,d_camera);
+    //free_world<<<1,1>>>(d_list,d_world,d_camera);
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaFree(d_camera));
     checkCudaErrors(cudaFree(d_world));
