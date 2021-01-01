@@ -14,9 +14,11 @@
     <CudaCompile Include="main.cu" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="bvh.h" />
     <ClInclude Include="check_cuda.h" />
     <ClInclude Include="color.h" />
     <ClInclude Include="hittable_list.h" />
+    <ClInclude Include="math.h" />
     <ClInclude Include="ray.h" />
     <ClInclude Include="rtweekend.h" />
     <ClInclude Include="sphere.h" />
@@ -24,6 +26,9 @@
     <ClInclude Include="hittable.h" />
     <ClInclude Include="camera.h" />
     <ClInclude Include="material.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="aabb.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{76D70A35-15EF-4DFB-B902-2CEA1BA3A481}</ProjectGuid>

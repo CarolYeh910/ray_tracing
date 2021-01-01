@@ -26,9 +26,9 @@ class camera {
             origin = lookfrom;
             horizontal = focus_dist * viewport_width * u;
             vertical = focus_dist * viewport_height * v;
-            lower_left_corner = origin - horizontal/2 - vertical/2 - focus_dist*w;
+            lower_left_corner = origin - horizontal/2.0f - vertical/2.0f - focus_dist*w;
 
-            lens_radius = aperture / 2;
+            lens_radius = aperture / 2.0f;
         }
 
         __device__ ray get_ray(float s, float t, curandState* local_rand_state) const {
@@ -47,6 +47,6 @@ class camera {
         vec3 horizontal;
         vec3 vertical;
         vec3 u, v, w;
-        double lens_radius;
+        float lens_radius;
 };
 #endif

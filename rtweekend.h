@@ -36,6 +36,11 @@ __device__ inline float random_float(float min, float max, curandState* local_ra
 	return min + (max - min) * random_float(local_rand_state);
 }
 
+__device__ inline int random_int(int min, int max, curandState* local_rand_state) {
+    // Returns a random integer in [min,max].
+	return static_cast<int>(random_float(min, max + 1, local_rand_state));
+}
+
 __device__ inline float clamp(float x, float min, float max) {
     if (x < min) return min;
     if (x > max) return max;

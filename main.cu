@@ -5,12 +5,13 @@
 #include "sphere.h"
 #include "camera.h"
 #include "material.h"
+#include "bvh.h"
 
 #include <iostream>
 #include "check_cuda.h"
 #include <time.h>
 
-__global__ void create_world(hittable** list, hittable_list** world, camera** cam, float aspect_ratio, curandState* local_rand_state) {
+__global__ void create_world(hittable** list, hittable_list** world, camera** cam, float aspect_ratio, curandState* local_rand_state, bool BVH) {
 	if (threadIdx.x == 0 && blockIdx.x == 0) {
 
 		// World
@@ -58,7 +59,15 @@ __global__ void create_world(hittable** list, hittable_list** world, camera** ca
 		material* material3 = new metal(color(0.7, 0.6, 0.5), 0.0);
 		list[i++] = new sphere(point3(4, 1, 0), 1.0, material3);
 
-        *world = new hittable_list(list,i);
+		hittable** temp_ptr = new hittable*;
+
+        if (BVH)
+        {
+            *temp_ptr = new bvh_node(new hittable_list(list, i), 0.0f, 1.0f, local_rand_state);
+            *world = new hittable_list(temp_ptr, 1);
+        }
+        else
+            *world = new hittable_list(list, i);
 
 		// Camera
 
@@ -128,11 +137,12 @@ __global__ void render(int* fb, int image_width, int image_height, int samples_p
 int main() {
 
 	// Image
-    const auto aspect_ratio = 3.0 / 2.0;
+    const float aspect_ratio = 3.0f / 2.0f;
     const int image_width = 1200;
     const int image_height = static_cast<int>(image_width / aspect_ratio);
     const int samples_per_pixel = 500;
     const int max_depth = 50;
+    const bool BVH = false;
 
 	int thread_width = 24;
 	int thread_height = 16;
@@ -153,11 +163,16 @@ int main() {
     checkCudaErrors(cudaMalloc((void **)&d_world, sizeof(hittable_list *)));
     camera **d_camera;
     checkCudaErrors(cudaMalloc((void **)&d_camera, sizeof(camera *)));
-    create_world<<<1,1>>>(d_list, d_world, d_camera, aspect_ratio, d_rand_state_world);
+    create_world<<<1,1>>>(d_list, d_world, d_camera, aspect_ratio, d_rand_state_world, BVH);
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
 	std::cerr << "Rendering a " << image_width << "x" << image_height << " image with " << samples_per_pixel << " samples per pixel ";
+    if (BVH)
+        std::cerr << "with ";
+    else
+        std::cerr << "without ";
+    std::cerr << "BVH ";
 	std::cerr << "in " << thread_width << "x" << thread_height << " blocks.\n";
 
 	int num_pixels = image_width * image_height;

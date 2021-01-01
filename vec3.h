@@ -1,9 +1,8 @@
 #ifndef VEC3_H
 #define VEC3_H
 
+#include "math.h"
 #include <iostream>
-
-using std::sqrt;
 
 class vec3 {
     public:
@@ -68,7 +67,7 @@ using color = vec3;    // RGB color
 
 // vec3 Utility Functions
 
-__host__ __device__ inline std::ostream& operator<<(std::ostream &out, const vec3 &v) {
+__host__ inline std::ostream& operator<<(std::ostream &out, const vec3 &v) {
     return out << v.e[0] << ' ' << v.e[1] << ' ' << v.e[2];
 }
 
@@ -137,18 +136,15 @@ __device__ vec3 reflect(const vec3& v, const vec3& n) {
 }
 
 __device__ vec3 refract(const vec3& uv, const vec3& n, float etai_over_etat) {
-    float cos_theta = dot(-uv, n);
-    cos_theta = cos_theta < 1.0f ? cos_theta : 1.0f;
+    float cos_theta = fmin(dot(-uv, n), 1.0f);
     vec3 r_out_perp =  etai_over_etat * (uv + cos_theta*n);
-    float temp = 1.0f - r_out_perp.length_squared();
-    temp = temp >= 0.0f ? temp : -temp;
-    vec3 r_out_parallel = -sqrt(temp) * n;
+    vec3 r_out_parallel = -sqrt(fabs(1.0f - r_out_perp.length_squared())) * n;
     return r_out_perp + r_out_parallel;
 }
 
 __device__ vec3 random_in_unit_disk(curandState* local_rand_state) {
     while (true) {
-        auto p = vec3(random_float(-1.0f,1.0f,local_rand_state), random_float(-1.0f,1.0f,local_rand_state), 0.0f);
+        vec3 p = vec3(random_float(-1.0f,1.0f,local_rand_state), random_float(-1.0f,1.0f,local_rand_state), 0.0f);
         if (p.length_squared() >= 1) continue;
         return p;
     }

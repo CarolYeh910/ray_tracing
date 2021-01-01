@@ -63,8 +63,7 @@ class dielectric : public material {
             float refraction_ratio = rec.front_face ? (1.0f/ir) : ir;
 
             vec3 unit_direction = unit_vector(r_in.direction());
-            float cos_theta = dot(-unit_direction, rec.normal);
-            cos_theta = cos_theta < 1.0f ? cos_theta : 1.0f;
+            float cos_theta = fmin(dot(-unit_direction, rec.normal), 1.0f);
             float sin_theta = sqrt(1.0f - cos_theta*cos_theta);
 
             bool cannot_refract = refraction_ratio * sin_theta > 1.0f;
