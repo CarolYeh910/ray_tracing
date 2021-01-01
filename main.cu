@@ -81,7 +81,7 @@ __global__ void free_world(hittable** list, hittable_list** world, camera** cam)
     delete *cam;
 }
 
-__device__ color ray_color(const ray& r, const hittable_list** world, int max_depth, curandState *local_rand_state) {
+__device__ color ray_color(const ray& r, hittable_list** world, int max_depth, curandState *local_rand_state) {
     ray cur_ray = r;
 	color cur_attenuation = vec3(1.0f, 1.0f, 1.0f);
     for(int i = 0; i < max_depth; i++) {
