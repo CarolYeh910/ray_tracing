@@ -3,6 +3,7 @@
 #include "color.h"
 #include "hittable_list.h"
 #include "sphere.h"
+#include "moving_sphere.h"
 #include "camera.h"
 #include "material.h"
 #include "bvh.h"
@@ -32,7 +33,8 @@ __global__ void create_world(hittable** list, hittable_list** world, camera** ca
 						// diffuse
 						color albedo = color::random(local_rand_state) * color::random(local_rand_state);
 						sphere_material = new lambertian(albedo);
-						list[i++] = new sphere(center, 0.2, sphere_material);
+						point3 center2 = center + vec3(0, random_float(0,.5,local_rand_state), 0);
+						list[i++] = new moving_sphere(center, center2, 0.0, 1.0, 0.2, sphere_material);
 					}
 					else if (choose_mat < 0.95) {
 						// metal
@@ -77,7 +79,7 @@ __global__ void create_world(hittable** list, hittable_list** world, camera** ca
 		float dist_to_focus = 10.0;
 		float aperture = 0.1;
 
-		*cam = new camera(lookfrom, lookat, vup, 20, aspect_ratio, aperture, dist_to_focus);
+		*cam = new camera(lookfrom, lookat, vup, 20, aspect_ratio, aperture, dist_to_focus, 0.0, 1.0);
 	}
 }
 
@@ -137,10 +139,10 @@ __global__ void render(int* fb, int image_width, int image_height, int samples_p
 int main() {
 
 	// Image
-    const float aspect_ratio = 3.0f / 2.0f;
-    const int image_width = 1200;
+    const float aspect_ratio = 16.0f / 9.0f;
+    const int image_width = 400;
     const int image_height = static_cast<int>(image_width / aspect_ratio);
-    const int samples_per_pixel = 500;
+    const int samples_per_pixel = 100;
     const int max_depth = 50;
     const bool BVH = false;
 

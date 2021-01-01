@@ -12,7 +12,9 @@ class camera {
             float vfov, // vertical field-of-view in degrees
             float aspect_ratio,
             float aperture,
-            float focus_dist
+            float focus_dist,
+            float _time0 = 0,
+            float _time1 = 0
         ) {
             float theta = degrees_to_radians(vfov);
             float h = tan(theta/2.0f);
@@ -29,6 +31,8 @@ class camera {
             lower_left_corner = origin - horizontal/2.0f - vertical/2.0f - focus_dist*w;
 
             lens_radius = aperture / 2.0f;
+            time0 = _time0;
+            time1 = _time1;
         }
 
         __device__ ray get_ray(float s, float t, curandState* local_rand_state) const {
@@ -37,7 +41,8 @@ class camera {
 
             return ray(
                 origin + offset,
-                lower_left_corner + s*horizontal + t*vertical - origin - offset
+                lower_left_corner + s*horizontal + t*vertical - origin - offset,
+                random_float(time0, time1, local_rand_state)
             );
         }
 
@@ -48,5 +53,6 @@ class camera {
         vec3 vertical;
         vec3 u, v, w;
         float lens_radius;
+        float time0, time1;  // shutter open/close times
 };
 #endif
