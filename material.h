@@ -2,11 +2,15 @@
 #define MATERIAL_H
 
 #include "rtweekend.h"
+#include "texture.h"
 
 struct hit_record;
 
 class material {
     public:
+        __device__ virtual color emitted(double u, double v, const point3& p) const {
+            return color(0,0,0);
+        }
         __device__ virtual bool scatter(
             const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* local_rand_state
         ) const = 0;
@@ -14,7 +18,8 @@ class material {
 
 class lambertian : public material {
     public:
-        __host__ __device__ lambertian(const color& a) : albedo(a) {}
+        __host__ __device__ lambertian(const color& a) : albedo(new solid_color(a)) {}
+        __host__ __device__ lambertian(my_texture* a) : albedo(a) {}
 
         __device__ virtual bool scatter(
             const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* local_rand_state
@@ -26,12 +31,12 @@ class lambertian : public material {
                 scatter_direction = rec.normal;
 
             scattered = ray(rec.p, scatter_direction, r_in.time());
-            attenuation = albedo;
+            attenuation = albedo->value(rec.u, rec.v, rec.p);
             return true;
         }
 
     public:
-        color albedo;
+        my_texture* albedo;
 };
 
 class metal : public material {
@@ -88,6 +93,25 @@ class dielectric : public material {
             r0 = r0*r0;
             return r0 + (1.0f-r0)*pow((1.0f - cosine),5.0f);
         }
+};
+
+class diffuse_light : public material {
+public:
+    __device__ diffuse_light(my_texture* a) : emit(a) {}
+    __device__ diffuse_light(color c) : emit(new solid_color(c)) {}
+
+    __device__ virtual bool scatter(
+        const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* local_rand_state
+    ) const override {
+        return false;
+    }
+
+    __device__ virtual color emitted(double u, double v, const point3& p) const override {
+        return emit->value(u, v, p);
+    }
+
+public:
+    my_texture* emit;
 };
 
 #endif

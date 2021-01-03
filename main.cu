@@ -2,23 +2,25 @@
 
 #include "color.h"
 #include "hittable_list.h"
-#include "sphere.h"
 #include "moving_sphere.h"
+#include "sphere.h"
 #include "camera.h"
 #include "material.h"
 #include "bvh.h"
+#include "texture.h"
+#include "rtw_stb_image.h"
 
 #include <iostream>
 #include "check_cuda.h"
 #include <time.h>
 
-__global__ void create_world(hittable** list, hittable_list** world, camera** cam, float aspect_ratio, curandState* local_rand_state, bool BVH) {
+__global__ void create_world(hittable** list, hittable_list** world, camera** cam, float aspect_ratio, curandState* local_rand_state, bool BVH, unsigned char *data_cuda, int w1, int h1, unsigned char *data2_cuda, int w2, int h2) {
 	if (threadIdx.x == 0 && blockIdx.x == 0) {
 
 		// World
-
-		material* ground_material = new lambertian(color(0.5, 0.5, 0.5));
-		list[0] = new sphere(point3(0, -1000, 0), 1000, ground_material);
+        //checker_texture* checker = new checker_texture(color(0.2, 0.3, 0.1), color(0.9, 0.9, 0.9));
+		image_texture* earth_texture = new image_texture(data_cuda, w1, h1);
+		list[0] = new sphere(point3(0, -1000, 0), 1000, new lambertian(earth_texture));
 
 		int i = 1;
 		for (int a = -11; a < 11; a++) {
@@ -55,13 +57,15 @@ __global__ void create_world(hittable** list, hittable_list** world, camera** ca
 		material* material1 = new dielectric(1.5);
 		list[i++] = new sphere(point3(0, 1, 0), 1.0, material1);
 
-		material* material2 = new lambertian(color(0.4, 0.2, 0.1));
-		list[i++] = new sphere(point3(-4, 1, 0), 1.0, material2);
+		//material* material2 = new lambertian(color(0.4, 0.2, 0.1));
+        image_texture* ball_texture = new image_texture(data2_cuda, w2, h2);
+        diffuse_light* difflight = new diffuse_light(ball_texture);
+		list[i++] = new sphere(point3(-4, 1, 0), 1.0, difflight);
 
 		material* material3 = new metal(color(0.7, 0.6, 0.5), 0.0);
 		list[i++] = new sphere(point3(4, 1, 0), 1.0, material3);
 
-		hittable** temp_ptr = new hittable*;
+        hittable** temp_ptr = new hittable*;
 
         if (BVH)
         {
@@ -69,14 +73,14 @@ __global__ void create_world(hittable** list, hittable_list** world, camera** ca
             *world = new hittable_list(temp_ptr, 1);
         }
         else
-            *world = new hittable_list(list, i);
+            *world = new hittable_list(list,i);
 
 		// Camera
 
-		point3 lookfrom(13,2,3);
+		point3 lookfrom(0,5,20);
 		point3 lookat(0,0,0);
 		vec3 vup(0,1,0);
-		float dist_to_focus = 10.0;
+		float dist_to_focus = 20.0;
 		float aperture = 0.1;
 
 		*cam = new camera(lookfrom, lookat, vup, 20, aspect_ratio, aperture, dist_to_focus, 0.0, 1.0);
@@ -92,7 +96,7 @@ __global__ void free_world(hittable** list, hittable_list** world, camera** cam)
     delete *cam;
 }
 
-__device__ color ray_color(const ray& r, hittable_list** world, int max_depth, curandState *local_rand_state) {
+__device__ color ray_color(const ray& r, const color& background, hittable_list** world, int max_depth, curandState *local_rand_state) {
     ray cur_ray = r;
 	color cur_attenuation = vec3(1.0f, 1.0f, 1.0f);
     for(int i = 0; i < max_depth; i++) {
@@ -100,20 +104,17 @@ __device__ color ray_color(const ray& r, hittable_list** world, int max_depth, c
         if ((*world)->hit(cur_ray, 0.001f, infinity, rec)) {
 			ray scattered;
 			color attenuation;
+            color emitted = rec.mat_ptr->emitted(rec.u, rec.v, rec.p);
 			if (rec.mat_ptr->scatter(cur_ray, rec, attenuation, scattered, local_rand_state))
 			{
-				cur_attenuation = cur_attenuation * attenuation;
+				cur_attenuation = emitted + cur_attenuation * attenuation;
 				cur_ray = scattered;
 			}
 			else
-				return color(0,0,0);
+				return emitted;
         }
-        else {
-            vec3 unit_direction = unit_vector(cur_ray.direction());
-			float t = 0.5f * (unit_direction.y() + 1.0f);
-			vec3 c = (1.0f - t) * vec3(1.0f, 1.0f, 1.0f) + t * vec3(0.5, 0.7f, 1.0f);
-            return cur_attenuation * c;
-        }
+        else
+            return background*cur_attenuation;
     }
 	return vec3(0.0f, 0.0f, 0.0f); // exceeded recursion
 }
@@ -124,6 +125,7 @@ __global__ void render(int* fb, int image_width, int image_height, int samples_p
 	int j = threadIdx.y + blockIdx.y * blockDim.y;
 	if ((i >= image_width) || (j >= image_height)) return;
 	int pixel_index = j * image_width + i;
+    color background = color(0.3, 0.3, 0.4);
 
 	curandState* local_rand_state = rand_state + pixel_index;
 	color pixel_color(0.0f, 0.0f, 0.0f);
@@ -131,24 +133,38 @@ __global__ void render(int* fb, int image_width, int image_height, int samples_p
 		float u = float(i + random_float(local_rand_state)) / (image_width - 1);
 		float v = float(j + random_float(local_rand_state)) / (image_height - 1);
 		ray r = (*cam)->get_ray(u, v, local_rand_state);
-		pixel_color += ray_color(r, world, max_depth, local_rand_state);
+		pixel_color += ray_color(r, background, world, max_depth, local_rand_state);
 	}
 	write_color(fb + pixel_index * 3, pixel_color, samples_per_pixel);
+}
+
+unsigned char* load_texture(const char* path, unsigned char *data, int &width, int &height) {
+    int components_per_pixel = 3;
+    data = stbi_load(path, &width, &height, &components_per_pixel, components_per_pixel);
+    if (!data) {
+        std::cerr << "ERROR: Could not load texture image file '" << path << "'.\n";
+        width = height = 0;
+    }
+    int size = width*height*components_per_pixel;
+    unsigned char *data_cuda;
+    checkCudaErrors(cudaMalloc((void **)&data_cuda, size*sizeof(char)));
+    checkCudaErrors(cudaMemcpy(data_cuda, data, size*sizeof(char), cudaMemcpyHostToDevice));
+    return data_cuda;
 }
 
 int main() {
 
 	// Image
-    const float aspect_ratio = 16.0f / 9.0f;
-    const int image_width = 400;
+    const auto aspect_ratio = 3.0f / 2.0f;
+    const int image_width = 1200;
     const int image_height = static_cast<int>(image_width / aspect_ratio);
-    const int samples_per_pixel = 100;
+    const int samples_per_pixel = 500;
     const int max_depth = 50;
     const bool BVH = false;
 
 	int thread_width = 24;
 	int thread_height = 16;
-
+    cudaSetDevice(1);
     curandState *d_rand_state_world;
     checkCudaErrors(cudaMalloc((void **)&d_rand_state_world, 1*sizeof(curandState)));
 
@@ -157,6 +173,14 @@ int main() {
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
+    //load texture from picture
+    const char* filename = "th1.jpg";
+    const char* filename2 = "th3.jpg";
+    int w1, h1, w2, h2;
+    unsigned char *data = 0, *data2 = 0;
+    unsigned char *data_cuda = load_texture(filename, data, w1, h1);
+    unsigned char *data2_cuda = load_texture(filename2, data2, w2, h2);
+    
     // make our world of hitables & the camera
     hittable **d_list;
     int num_hitables = 22*22+1+3;
@@ -165,7 +189,7 @@ int main() {
     checkCudaErrors(cudaMalloc((void **)&d_world, sizeof(hittable_list *)));
     camera **d_camera;
     checkCudaErrors(cudaMalloc((void **)&d_camera, sizeof(camera *)));
-    create_world<<<1,1>>>(d_list, d_world, d_camera, aspect_ratio, d_rand_state_world, BVH);
+    create_world<<<1,1>>>(d_list, d_world, d_camera, aspect_ratio, d_rand_state_world, BVH, data_cuda, w1, h1, data2_cuda, w2, h2);
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
@@ -217,6 +241,10 @@ int main() {
     checkCudaErrors(cudaDeviceSynchronize());
     //free_world<<<1,1>>>(d_list,d_world,d_camera);
     checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaFree(data_cuda));
+    STBI_FREE(data);
+    checkCudaErrors(cudaFree(data2_cuda));
+    STBI_FREE(data2);
     checkCudaErrors(cudaFree(d_camera));
     checkCudaErrors(cudaFree(d_world));
     checkCudaErrors(cudaFree(d_list));
