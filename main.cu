@@ -18,7 +18,7 @@ __global__ void create_world(hittable** list, hittable_list** world, camera** ca
 	if (threadIdx.x == 0 && blockIdx.x == 0) {
 
 		// World
-        //checker_texture* checker = new checker_texture(color(0.0, 0.0, 0.0), color(0.9, 0.9, 0.9));
+        	//checker_texture* checker = new checker_texture(color(0.0, 0.0, 0.0), color(0.9, 0.9, 0.9));
 		image_texture* earth_texture = new image_texture(data_cuda, w1, h1);
 		list[0] = new sphere(point3(0, -1000, 0), 1000, new lambertian(earth_texture));
 
@@ -58,22 +58,22 @@ __global__ void create_world(hittable** list, hittable_list** world, camera** ca
 		list[i++] = new sphere(point3(0, 1, 0), 1.0, material1);
 
 		//material* material2 = new lambertian(color(0.4, 0.2, 0.1));
-        image_texture* ball_texture = new image_texture(data2_cuda, w2, h2);
-        diffuse_light* difflight = new diffuse_light(ball_texture);
+		image_texture* ball_texture = new image_texture(data2_cuda, w2, h2);
+		diffuse_light* difflight = new diffuse_light(ball_texture);
 		list[i++] = new sphere(point3(-4, 1, 0), 1.0, difflight);
 
 		material* material3 = new metal(color(0.7, 0.6, 0.5), 0.0);
 		list[i++] = new sphere(point3(4, 1, 0), 1.0, material3);
 
-        hittable** temp_ptr = new hittable*;
+		hittable** temp_ptr = new hittable*;
 
-        if (BVH)
-        {
-            *temp_ptr = new bvh_node(new hittable_list(list, i), 0.0f, 1.0f, local_rand_state);
-            *world = new hittable_list(temp_ptr, 1);
-        }
-        else
-            *world = new hittable_list(list,i);
+		if (BVH)
+		{
+		    *temp_ptr = new bvh_node(new hittable_list(list, i), 0.0f, 1.0f, local_rand_state);
+		    *world = new hittable_list(temp_ptr, 1);
+		}
+		else
+		    *world = new hittable_list(list,i);
 
 		// Camera
 
@@ -104,7 +104,7 @@ __device__ color ray_color(const ray& r, const color& background, hittable_list*
         if ((*world)->hit(cur_ray, 0.001f, infinity, rec)) {
 			ray scattered;
 			color attenuation;
-            color emitted = rec.mat_ptr->emitted(rec.u, rec.v, rec.p);
+            		color emitted = rec.mat_ptr->emitted(rec.u, rec.v, rec.p);
 			if (rec.mat_ptr->scatter(cur_ray, rec, attenuation, scattered, local_rand_state))
 			{
 				cur_attenuation = emitted + cur_attenuation * attenuation;
@@ -125,7 +125,7 @@ __global__ void render(int* fb, int image_width, int image_height, int samples_p
 	int j = threadIdx.y + blockIdx.y * blockDim.y;
 	if ((i >= image_width) || (j >= image_height)) return;
 	int pixel_index = j * image_width + i;
-    color background = color(0.3, 0.3, 0.4);
+    	color background = color(0.3, 0.3, 0.4);
 
 	curandState* local_rand_state = rand_state + pixel_index;
 	color pixel_color(0.0f, 0.0f, 0.0f);
@@ -162,8 +162,8 @@ int main() {
     const int max_depth = 50;
     const bool BVH = false;
 
-	int thread_width = 24;
-	int thread_height = 16;
+    int thread_width = 24;
+    int thread_height = 16;
     cudaSetDevice(1);
     curandState *d_rand_state_world;
     checkCudaErrors(cudaMalloc((void **)&d_rand_state_world, 1*sizeof(curandState)));
@@ -193,13 +193,13 @@ int main() {
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
 
-	std::cerr << "Rendering a " << image_width << "x" << image_height << " image with " << samples_per_pixel << " samples per pixel ";
+    std::cerr << "Rendering a " << image_width << "x" << image_height << " image with " << samples_per_pixel << " samples per pixel ";
     if (BVH)
         std::cerr << "with ";
     else
         std::cerr << "without ";
     std::cerr << "BVH ";
-	std::cerr << "in " << thread_width << "x" << thread_height << " blocks.\n";
+    std::cerr << "in " << thread_width << "x" << thread_height << " blocks.\n";
 
 	int num_pixels = image_width * image_height;
 	size_t fb_size = 3 * num_pixels * sizeof(int);
@@ -211,11 +211,11 @@ int main() {
 	dim3 blocks(image_width / thread_width + 1, image_height / thread_height + 1);
 	dim3 threads(thread_width, thread_height);
 
-    // allocate random state
-    curandState *d_rand_state;
+        // allocate random state
+        curandState *d_rand_state;
 	checkCudaErrors(cudaMalloc((void**)&d_rand_state, num_pixels * sizeof(curandState)));
-    random_init<<<blocks, threads>>>(image_width, image_height, d_rand_state);
-    checkCudaErrors(cudaGetLastError());
+        random_init<<<blocks, threads>>>(image_width, image_height, d_rand_state);
+        checkCudaErrors(cudaGetLastError());
 	checkCudaErrors(cudaDeviceSynchronize());
 
 	clock_t start, stop;
