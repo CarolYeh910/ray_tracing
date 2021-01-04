@@ -20,7 +20,7 @@ __device__ int num_sball = 0;
 
 __global__ void create_world(hittable** list, hittable_list** world, camera** cam, float aspect_ratio, 
 	curandState* local_rand_state, bool BVH, unsigned char *data_cuda, int w1, int h1, unsigned char *data2_cuda, 
-	int w2, int h2, unsigned char *data_cuda_sky, int width_sky, int height_sky) {
+	int w2, int h2, unsigned char *data_cuda_sky, int width_sky, int height_sky, point3* centers, int num, material** maters) {
 	if (threadIdx.x == 0 && blockIdx.x == 0) {
 		sky_texture = new image_texture(data_cuda_sky, width_sky, height_sky);
 		// World
@@ -29,37 +29,63 @@ __global__ void create_world(hittable** list, hittable_list** world, camera** ca
 		list[0] = new sphere(point3(0, -1000, 0), 1000, new lambertian(earth_texture));
 
 		int i = 1;
-        for (int a = -11; a < 11; a++) {
-            for (int b = -11; b < 11; b++) {
-                float choose_mat = random_float(local_rand_state);
-                point3 center(a + 0.6 * random_float(local_rand_state), 0.2, b + 0.6 * random_float(local_rand_state));
+		if(num == 0){
+			for (int a = -11; a < 11; a++) {
+				for (int b = -11; b < 11; b++) {
+					float choose_mat = random_float(local_rand_state);
+					point3 center(a + 0.6 * random_float(local_rand_state), 0.2, b + 0.6 * random_float(local_rand_state));
+	
+					if ((center - point3(4, 0.2, 0)).length() > 0.9 && (center - point3(0, 0.2, 0)).length() > 0.9 && (center - point3(-4, 0.2, 0)).length() > 0.9) {
+						centers[num_sball] = point3(center.x(), 0.5 + 0.8 * random_float(local_rand_state), center.z());
+                        point3 center2 = centers[num_sball] + vec3(0, random_float(0,.01,local_rand_state), 0);
+						material* sphere_material;
+						if (choose_mat < 0.8) {
+							// diffuse
+							color albedo = color::random(local_rand_state) * color::random(local_rand_state);
+							sphere_material = new lambertian(albedo);
+                            maters[num_sball] = new lambertian(albedo);
+							list[i++] = new moving_sphere(centers[num_sball], center2, 0.0, 0.1, 0.2, sphere_material);
+						}
+						else if (choose_mat < 0.95) {
+							// metal
+							color albedo = color::random(0.5, 1, local_rand_state);
+							float fuzz = random_float(0, 0.5, local_rand_state);
+							sphere_material = new metal(albedo, fuzz);
+                            maters[num_sball] = new metal(albedo, fuzz);
+							list[i++] = new moving_sphere(centers[num_sball], center2, 0.0, 0.1, 0.2, sphere_material);
+						}
+						else {
+							// glass
+							sphere_material = new dielectric(1.5);
+                            maters[num_sball] = new dielectric(1.5);
+							list[i++] = new moving_sphere(centers[num_sball], center2, 0.0, 0.1, 0.2, sphere_material);
+						}
 
-                if ((center - point3(4, 0.2, 0)).length() > 0.9 && (center - point3(0, 0.2, 0)).length() > 0.9 && (center - point3(-4, 0.2, 0)).length() > 0.9) {
-                    material* sphere_material;
-                    if (choose_mat < 0.8) {
-                        // diffuse
-                        color albedo = color::random(local_rand_state) * color::random(local_rand_state);
-                        sphere_material = new lambertian(albedo);
-                        list[i++] = new sphere(center, 0.2, sphere_material);
-                    }
-                    else if (choose_mat < 0.95) {
-                        // metal
-                        color albedo = color::random(0.5, 1, local_rand_state);
-                        float fuzz = random_float(0, 0.5, local_rand_state);
-                        sphere_material = new metal(albedo, fuzz);
-                        list[i++] = new sphere(center, 0.2, sphere_material);
-                    }
-                    else {
-                        // glass
-                        sphere_material = new dielectric(1.5);
-                        list[i++] = new sphere(center, 0.2, sphere_material);
-                    }
+						num_sball ++;
+					}
+				}
+			}
+		}
+		else{
+			int th_sball = 0;
+			for (int a = -11; a < 11; a++) {
+				for (int b = -11; b < 11; b++) {
+					point3 bef_center = centers[th_sball];
+					double y1 = bef_center.y() * 0.96;
+					if(abs(y1 - 0.2) < 0.05){
+						y1 = 0.2;
+					}
 
-                    num_sball ++;
-                }
-            }
-        }
-		
+					point3 center(bef_center.x(), y1, bef_center.z());
+                    point3 center2 = center + vec3(0, random_float(0,.1,local_rand_state), 0);
+                    list[i++] = new moving_sphere(center, center2, 0.0, 0.1, 0.2, maters[th_sball]);
+					
+                    th_sball ++;
+                    if(th_sball >= num_sball) break;
+				}
+                if(th_sball >= num_sball) break;
+			}
+		}
 
 		material* material1 = new dielectric(1.5);
 		list[i++] = new sphere(point3(0, 1, 0), 1.0, material1);
@@ -84,9 +110,9 @@ __global__ void create_world(hittable** list, hittable_list** world, camera** ca
 		// Camera
 
 		point3 lookfrom(0,4,20);
-		point3 lookat(0,4,0);
+		point3 lookat(0,0,0);
 		vec3 vup(0,1,0);
-		float dist_to_focus = 20.0;
+		float dist_to_focus = 21.0;
 		float aperture = 0.1;
 
 		*cam = new camera(lookfrom, lookat, vup, 20, aspect_ratio, aperture, dist_to_focus, 0.0, 1.0);
@@ -179,12 +205,18 @@ int main() {
     const int samples_per_pixel = 500;
     const int max_depth = 50;
 	const bool BVH = true;
+	const int rounds = 500;
 
 	int thread_width = 24;
 	int thread_height = 16;
     cudaSetDevice(1);
     curandState *d_rand_state_world;
 	checkCudaErrors(cudaMalloc((void **)&d_rand_state_world, 1*sizeof(curandState)));
+	
+	point3* centers;
+	checkCudaErrors(cudaMalloc((void **)&centers, 22*22*sizeof(point3)));
+	material** maters;
+	checkCudaErrors(cudaMalloc((void **)&maters, 22*22*sizeof(material*)));
 
     // we need that 2nd random state to be initialized for the world creation
     random_init<<<1,1>>>(1, 1, d_rand_state_world);
@@ -201,67 +233,70 @@ int main() {
 	unsigned char *data2_cuda = load_texture(filename2, data2, w2, h2);
 	unsigned char *data3_cuda = load_texture(filename3, data3, w3, h3);
 	
-    // make our world of hitables & the camera
-    hittable **d_list;
-    int num_hitables = 22*22+1+3;
-    checkCudaErrors(cudaMalloc((void **)&d_list, num_hitables*sizeof(hittable *)));
-    hittable_list **d_world;
-    checkCudaErrors(cudaMalloc((void **)&d_world, sizeof(hittable_list *)));
-    camera **d_camera;
-    checkCudaErrors(cudaMalloc((void **)&d_camera, sizeof(camera *)));
-    create_world<<<1,1>>>(d_list, d_world, d_camera, aspect_ratio, d_rand_state_world, BVH, data_cuda, w1, h1, data2_cuda, w2, h2, data3_cuda, w3, h3);
-    checkCudaErrors(cudaGetLastError());
-    checkCudaErrors(cudaDeviceSynchronize());
+	for(int i = 0; i < rounds; i ++){
+		std::cerr << "no:" << i << std::endl;
+		// make our world of hitables & the camera
+		hittable **d_list;
+		int num_hitables = 22*22+1+3;
+		checkCudaErrors(cudaMalloc((void **)&d_list, num_hitables*sizeof(hittable *)));
+		hittable_list **d_world;
+		checkCudaErrors(cudaMalloc((void **)&d_world, sizeof(hittable_list *)));
+		camera **d_camera;
+		checkCudaErrors(cudaMalloc((void **)&d_camera, sizeof(camera *)));
+		create_world<<<1,1>>>(d_list, d_world, d_camera, aspect_ratio, d_rand_state_world, BVH, data_cuda, w1, h1, data2_cuda, w2, h2, data3_cuda, w3, h3, centers, i, maters);
+		checkCudaErrors(cudaGetLastError());
+		checkCudaErrors(cudaDeviceSynchronize());
+	
+		std::cerr << "Rendering a " << image_width << "x" << image_height << " image with " << samples_per_pixel << " samples per pixel ";
+		if (BVH)
+			std::cerr << "with ";
+		else
+			std::cerr << "without ";
+		std::cerr << "BVH ";
+		std::cerr << "in " << thread_width << "x" << thread_height << " blocks.\n";
+	
+		int num_pixels = image_width * image_height;
+		size_t fb_size = 3 * num_pixels * sizeof(int);
+	
+		// allocate FB
+		int* fb;
+		checkCudaErrors(cudaMallocManaged((void**)&fb, fb_size));
+	
+		dim3 blocks(image_width / thread_width + 1, image_height / thread_height + 1);
+		dim3 threads(thread_width, thread_height);
+	
+		// allocate random state
+		curandState *d_rand_state;
+		checkCudaErrors(cudaMalloc((void**)&d_rand_state, num_pixels * sizeof(curandState)));
+		random_init<<<blocks, threads>>>(image_width, image_height, d_rand_state);
+		checkCudaErrors(cudaGetLastError());
+		checkCudaErrors(cudaDeviceSynchronize());
+	
+		clock_t start, stop;
+		start = clock();
+		// Render our buffer
+		render <<<blocks, threads>>> (fb, image_width, image_height, samples_per_pixel, max_depth, d_world, d_camera, d_rand_state);
+		checkCudaErrors(cudaGetLastError());
+		checkCudaErrors(cudaDeviceSynchronize());
+		stop = clock();
+		double timer_seconds = ((double)(stop - start)) / CLOCKS_PER_SEC;
+		std::cerr << "took " << timer_seconds << " seconds.\n";
+	
+		// Output FB as Image
+		std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+		for (int j = image_height - 1; j >= 0; j--) {
+			for (int i = 0; i < image_width; i++) {
+				size_t pixel_index = j * 3 * image_width + i * 3;
+				std::cout << fb[pixel_index + 0] << ' ' << fb[pixel_index + 1] << ' ' << fb[pixel_index + 2] << '\n';
+			}
+		}
 
-    std::cerr << "Rendering a " << image_width << "x" << image_height << " image with " << samples_per_pixel << " samples per pixel ";
-    if (BVH)
-        std::cerr << "with ";
-    else
-        std::cerr << "without ";
-    std::cerr << "BVH ";
-    std::cerr << "in " << thread_width << "x" << thread_height << " blocks.\n";
-
-    int num_pixels = image_width * image_height;
-    size_t fb_size = 3 * num_pixels * sizeof(int);
-
-    // allocate FB
-    int* fb;
-    checkCudaErrors(cudaMallocManaged((void**)&fb, fb_size));
-
-    dim3 blocks(image_width / thread_width + 1, image_height / thread_height + 1);
-    dim3 threads(thread_width, thread_height);
-
-    // allocate random state
-    curandState *d_rand_state;
-    checkCudaErrors(cudaMalloc((void**)&d_rand_state, num_pixels * sizeof(curandState)));
-    random_init<<<blocks, threads>>>(image_width, image_height, d_rand_state);
-    checkCudaErrors(cudaGetLastError());
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    clock_t start, stop;
-    start = clock();
-    // Render our buffer
-    render <<<blocks, threads>>> (fb, image_width, image_height, samples_per_pixel, max_depth, d_world, d_camera, d_rand_state);
-    checkCudaErrors(cudaGetLastError());
-    checkCudaErrors(cudaDeviceSynchronize());
-    stop = clock();
-    double timer_seconds = ((double)(stop - start)) / CLOCKS_PER_SEC;
-    std::cerr << "took " << timer_seconds << " seconds.\n";
-
-    // Output FB as Image
-    std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
-    for (int j = image_height - 1; j >= 0; j--) {
-        for (int i = 0; i < image_width; i++) {
-            size_t pixel_index = j * 3 * image_width + i * 3;
-            std::cout << fb[pixel_index + 0] << ' ' << fb[pixel_index + 1] << ' ' << fb[pixel_index + 2] << '\n';
-        }
-    }
-
-    checkCudaErrors(cudaFree(d_camera));
-    checkCudaErrors(cudaFree(d_world));
-    checkCudaErrors(cudaFree(d_list));
-    checkCudaErrors(cudaFree(d_rand_state));
-    checkCudaErrors(cudaFree(fb));
+		checkCudaErrors(cudaFree(d_camera));
+		checkCudaErrors(cudaFree(d_world));
+		checkCudaErrors(cudaFree(d_list));
+		checkCudaErrors(cudaFree(d_rand_state));
+		checkCudaErrors(cudaFree(fb));
+	}
     
 
     // clean up
