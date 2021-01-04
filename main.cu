@@ -18,7 +18,7 @@ __global__ void create_world(hittable** list, hittable_list** world, camera** ca
 	if (threadIdx.x == 0 && blockIdx.x == 0) {
 
 		// World
-        //checker_texture* checker = new checker_texture(color(0.2, 0.3, 0.1), color(0.9, 0.9, 0.9));
+        //checker_texture* checker = new checker_texture(color(0.0, 0.0, 0.0), color(0.9, 0.9, 0.9));
 		image_texture* earth_texture = new image_texture(data_cuda, w1, h1);
 		list[0] = new sphere(point3(0, -1000, 0), 1000, new lambertian(earth_texture));
 
